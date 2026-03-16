@@ -53,6 +53,7 @@ codex_config_toml="${INPUT_CODEX_CONFIG_TOML:-}"
 image_version="${INPUT_IMAGE_VERSION:-0.114.0}"
 model="${INPUT_MODEL:-}"
 reasoning_effort="${INPUT_REASONING_EFFORT:-}"
+network_access="${INPUT_NETWORK_ACCESS:-false}"
 timeout_seconds="${INPUT_TIMEOUT:-300}"
 
 image="ghcr.io/icoretech/codex-docker:${image_version}"
@@ -124,10 +125,19 @@ fi
 # --- Build prompt ---
 
 prompt_file=$(mktemp)
+
+# When network access is disabled, prepend a policy instruction to the prompt.
+network_policy=""
+if [[ "${network_access}" != "true" ]]; then
+  network_policy="NETWORK POLICY: You MUST NOT make any network requests. Do not use curl, wget, fetch, or any tool that accesses the internet. Work exclusively with local files and repositories already available in the workspace.
+
+"
+fi
+
 if [[ -n "${input_text}" ]]; then
-  printf '%s\n\n---\n\n%s' "${prompt}" "${input_text}" > "${prompt_file}"
+  printf '%s%s\n\n---\n\n%s' "${network_policy}" "${prompt}" "${input_text}" > "${prompt_file}"
 else
-  printf '%s' "${prompt}" > "${prompt_file}"
+  printf '%s%s' "${network_policy}" "${prompt}" > "${prompt_file}"
 fi
 
 # --- Run codex ---

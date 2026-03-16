@@ -148,6 +148,7 @@ You can pass a base64-encoded `config.toml` to customize Codex behavior (model d
 | `image_version` | No | `0.114.0` | codex-docker image version tag used for the container. |
 | `model` | No | `""` | Model override passed to `codex exec --model`. When omitted, the model configured in your Codex config is used. |
 | `reasoning_effort` | No | `""` | Reasoning effort level (`minimal`, `low`, `medium`, `high`, `xhigh`). Passed as `model_reasoning_effort` config override. |
+| `network_access` | No | `false` | Allow Codex to make network requests (`curl`, `wget`, etc.) during execution. When `false`, a prompt-level policy instructs the model not to use networking tools. |
 | `timeout` | No | `300` | Maximum seconds allowed for Codex execution before the step is killed. |
 
 ---
@@ -469,6 +470,7 @@ jobs:
             If the issue is too vague, already resolved, or not code-related,
             respond with ONLY: SKIP
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          network_access: 'false'
           timeout: '1800'
 
       - name: Post analysis comment

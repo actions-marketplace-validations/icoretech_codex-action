@@ -38,6 +38,10 @@ inputs:
     description: 'Reasoning effort level (minimal, low, medium, high, xhigh). Passed via model_reasoning_effort config override.'
     required: false
     default: ''
+  network_access:
+    description: 'Allow Codex to make network requests (curl, wget, etc.) during execution. When false (default), a prompt-level policy instructs the model not to use networking tools.'
+    required: false
+    default: 'false'
   timeout:
     description: 'Max seconds for codex execution (default: 300)'
     required: false
@@ -63,5 +67,6 @@ runs:
         INPUT_IMAGE_VERSION: ${{ inputs.image_version }}
         INPUT_MODEL: ${{ inputs.model }}
         INPUT_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
+        INPUT_NETWORK_ACCESS: ${{ inputs.network_access }}
         INPUT_TIMEOUT: ${{ inputs.timeout }}
       run: ${{ github.action_path }}/entrypoint.sh

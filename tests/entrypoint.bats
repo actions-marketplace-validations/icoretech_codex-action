@@ -13,6 +13,7 @@ setup() {
   export INPUT_IMAGE_VERSION="0.114.0"
   export INPUT_MODEL=""
   export INPUT_REASONING_EFFORT=""
+  export INPUT_NETWORK_ACCESS="true"
   export INPUT_TIMEOUT="300"
 
   # Set mock docker to return some output
@@ -270,6 +271,52 @@ teardown() {
   local exec_call
   exec_call=$(docker_call 1)
   [[ "${exec_call}" == *"-e GIT_CONFIG_GLOBAL=/workspace/.codex-gitconfig"* ]]
+}
+
+# --- Image Version Tests ---
+
+# --- Network Access Tests ---
+
+@test "network access: disabled by default prepends policy to prompt" {
+  export INPUT_NETWORK_ACCESS="false"
+  run bash entrypoint.sh
+  [ "$status" -eq 0 ]
+  local stdin_content
+  stdin_content=$(docker_stdin 1)
+  [[ "${stdin_content}" == *"NETWORK POLICY"* ]]
+  [[ "${stdin_content}" == *"MUST NOT make any network requests"* ]]
+}
+
+@test "network access: enabled skips network policy in prompt" {
+  export INPUT_NETWORK_ACCESS="true"
+  run bash entrypoint.sh
+  [ "$status" -eq 0 ]
+  local stdin_content
+  stdin_content=$(docker_stdin 1)
+  [[ "${stdin_content}" != *"NETWORK POLICY"* ]]
+}
+
+@test "network access: policy is prepended before user prompt" {
+  export INPUT_NETWORK_ACCESS="false"
+  run bash entrypoint.sh
+  [ "$status" -eq 0 ]
+  local stdin_content
+  stdin_content=$(docker_stdin 1)
+  # Policy should come before the user prompt
+  [[ "${stdin_content}" == "NETWORK POLICY"* ]]
+  [[ "${stdin_content}" == *"Summarize these changes" ]]
+}
+
+@test "network access: policy works with input_text" {
+  export INPUT_NETWORK_ACCESS="false"
+  export INPUT_INPUT_TEXT="Some extra data"
+  run bash entrypoint.sh
+  [ "$status" -eq 0 ]
+  local stdin_content
+  stdin_content=$(docker_stdin 1)
+  [[ "${stdin_content}" == "NETWORK POLICY"* ]]
+  [[ "${stdin_content}" == *"Summarize these changes"* ]]
+  [[ "${stdin_content}" == *"Some extra data"* ]]
 }
 
 # --- Image Version Tests ---
