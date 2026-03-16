@@ -12,7 +12,7 @@ Run OpenAI Codex CLI non-interactively in GitHub Actions workflows via [codex-do
 ```yaml
 - name: Run Codex
   id: codex
-  uses: icoretech/codex-action@v1
+  uses: icoretech/codex-action@v0
   with:
     prompt: "Summarize these changes for operators"
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
@@ -154,7 +154,7 @@ jobs:
 
       - name: Summarize changelog with Codex
         id: codex
-        uses: icoretech/codex-action@v1
+        uses: icoretech/codex-action@v0
         with:
           prompt: |
             You are a technical writer. Summarize the following changelog
@@ -211,7 +211,7 @@ jobs:
 
       - name: Generate description with Codex
         id: codex
-        uses: icoretech/codex-action@v1
+        uses: icoretech/codex-action@v0
         with:
           prompt: |
             You are a senior engineer reviewing a pull request. Given the
@@ -264,7 +264,7 @@ jobs:
 
       - name: Review with Codex
         id: codex
-        uses: icoretech/codex-action@v1
+        uses: icoretech/codex-action@v0
         with:
           prompt: |
             You are an experienced software engineer performing a code review.
@@ -324,7 +324,7 @@ jobs:
 
       - name: Analyze with Codex
         id: codex
-        uses: icoretech/codex-action@v1
+        uses: icoretech/codex-action@v0
         with:
           prompt: |
             Perform a thorough security and correctness analysis of the
@@ -433,7 +433,7 @@ shellcheck entrypoint.sh
 
 This repository uses [release-please](https://github.com/googleapis/release-please) with the `simple` release type. Merging a conventional-commit PR into `main` triggers release-please to open a release PR. When that release PR is merged:
 
-1. A new semver tag (e.g., `v1.2.3`) is created automatically.
-2. The `update-major-tag` job force-updates the corresponding major tag (e.g., `v1`) to point at the new release.
+1. A new semver tag (e.g., `v0.2.0`) is created automatically.
+2. The `update-major-tag` job force-updates the corresponding major tag (e.g., `v0`) to point at the new release.
 
-Users pinning to a major tag (e.g., `uses: icoretech/codex-action@v1`) always receive the latest patch and minor releases within that major automatically.
+Users pinning to a major tag (e.g., `uses: icoretech/codex-action@v0`) always receive the latest patch and minor releases within that major automatically.
