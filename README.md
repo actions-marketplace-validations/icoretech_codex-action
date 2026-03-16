@@ -94,6 +94,37 @@ Authenticate once via device auth and store the resulting credentials as a secre
 
 ---
 
+### Optional: Custom Preferences (`codex_config_toml`)
+
+You can pass a base64-encoded `config.toml` to customize Codex behavior (model defaults, personality, sandbox mode, etc.). This works with either authentication method.
+
+1. Create a `config.toml` with your preferences:
+
+   ```toml
+   model = "o4-mini"
+   sandbox_mode = "off"
+   ```
+
+2. Encode it:
+
+   ```bash
+   # Linux
+   base64 -w0 config.toml
+
+   # macOS
+   base64 -i config.toml
+   ```
+
+3. Store the output as a repository secret (e.g., `CODEX_CONFIG_TOML_B64`) and reference it:
+
+   ```yaml
+   codex_config_toml: ${{ secrets.CODEX_CONFIG_TOML_B64 }}
+   ```
+
+> Note: The `model` and `reasoning_effort` action inputs take precedence over values in `config.toml` when both are provided.
+
+---
+
 ## Inputs
 
 | Input | Required | Default | Description |
@@ -102,6 +133,7 @@ Authenticate once via device auth and store the resulting credentials as a secre
 | `input_text` | No | `""` | Data to process (e.g., changelog content). Appended after the prompt with a `---` separator when provided. |
 | `openai_api_key` | No | `""` | OpenAI API key. Mutually exclusive with `codex_config`. |
 | `codex_config` | No | `""` | Base64-encoded `auth.json` from a prior device-auth session. Mutually exclusive with `openai_api_key`. |
+| `codex_config_toml` | No | `""` | Base64-encoded `config.toml` with Codex preferences (model, personality, etc.). Works with either auth method. |
 | `image_version` | No | `0.114.0` | codex-docker image version tag used for the container. |
 | `model` | No | `""` | Model override passed to `codex exec --model`. When omitted, the model configured in your Codex config is used. |
 | `reasoning_effort` | No | `""` | Reasoning effort level (`minimal`, `low`, `medium`, `high`, `xhigh`). Passed as `model_reasoning_effort` config override. |

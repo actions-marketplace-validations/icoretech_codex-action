@@ -9,6 +9,7 @@ setup() {
   export INPUT_INPUT_TEXT=""
   export INPUT_OPENAI_API_KEY="sk-test-key-12345"
   export INPUT_CODEX_CONFIG=""
+  export INPUT_CODEX_CONFIG_TOML=""
   export INPUT_IMAGE_VERSION="0.114.0"
   export INPUT_MODEL=""
   export INPUT_REASONING_EFFORT=""
@@ -82,6 +83,44 @@ teardown() {
   [ "$status" -eq 0 ]
   [ "$(docker_call_count)" -eq 1 ]
   [[ "$(docker_call 0)" == *"exec --ephemeral --skip-git-repo-check"* ]]
+}
+
+# --- Config TOML Tests ---
+
+@test "codex_config_toml: decoded and written alongside api key auth" {
+  export INPUT_CODEX_CONFIG_TOML
+  INPUT_CODEX_CONFIG_TOML=$(echo 'model = "o4-mini"' | base64)
+  run bash entrypoint.sh
+  [ "$status" -eq 0 ]
+  [ "$(docker_call_count)" -eq 2 ]
+}
+
+@test "codex_config_toml: decoded and written alongside config auth" {
+  export INPUT_OPENAI_API_KEY=""
+  local config_content
+  config_content=$(cat tests/fixtures/sample_auth.json)
+  export INPUT_CODEX_CONFIG
+  INPUT_CODEX_CONFIG=$(echo "${config_content}" | base64)
+  export INPUT_CODEX_CONFIG_TOML
+  INPUT_CODEX_CONFIG_TOML=$(echo 'model = "o4-mini"' | base64)
+  run bash entrypoint.sh
+  [ "$status" -eq 0 ]
+  [ "$(docker_call_count)" -eq 1 ]
+}
+
+@test "fails when codex_config_toml is invalid base64" {
+  export INPUT_CODEX_CONFIG_TOML="!!!not-base64!!!"
+  run bash entrypoint.sh
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"codex_config_toml is not valid base64"* ]]
+}
+
+@test "secret masking: codex_config_toml is masked in workflow logs" {
+  export INPUT_CODEX_CONFIG_TOML
+  INPUT_CODEX_CONFIG_TOML=$(echo "test-toml" | base64)
+  run bash entrypoint.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"::add-mask::${INPUT_CODEX_CONFIG_TOML}"* ]]
 }
 
 # --- Prompt Building Tests ---

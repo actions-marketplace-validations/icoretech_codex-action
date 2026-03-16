@@ -48,6 +48,7 @@ prompt="${INPUT_PROMPT:-}"
 input_text="${INPUT_INPUT_TEXT:-}"
 openai_api_key="${INPUT_OPENAI_API_KEY:-}"
 codex_config="${INPUT_CODEX_CONFIG:-}"
+codex_config_toml="${INPUT_CODEX_CONFIG_TOML:-}"
 image_version="${INPUT_IMAGE_VERSION:-0.114.0}"
 model="${INPUT_MODEL:-}"
 reasoning_effort="${INPUT_REASONING_EFFORT:-}"
@@ -62,6 +63,9 @@ if [[ -n "${openai_api_key}" ]]; then
 fi
 if [[ -n "${codex_config}" ]]; then
   echo "::add-mask::${codex_config}"
+fi
+if [[ -n "${codex_config_toml}" ]]; then
+  echo "::add-mask::${codex_config_toml}"
 fi
 
 # --- Validate inputs ---
@@ -85,6 +89,13 @@ if [[ -n "${codex_config}" ]]; then
   fi
 fi
 
+# Validate base64 if codex_config_toml is provided
+if [[ -n "${codex_config_toml}" ]]; then
+  if ! echo "${codex_config_toml}" | b64decode >/dev/null 2>&1; then
+    die "codex_config_toml is not valid base64"
+  fi
+fi
+
 # --- Setup auth ---
 
 auth_dir=$(mktemp -d)
@@ -101,6 +112,12 @@ if [[ -n "${openai_api_key}" ]]; then
 elif [[ -n "${codex_config}" ]]; then
   # Config auth: decode and write auth.json
   echo "${codex_config}" | b64decode > "${auth_dir}/auth.json"
+fi
+
+# --- Write optional config.toml ---
+
+if [[ -n "${codex_config_toml}" ]]; then
+  echo "${codex_config_toml}" | b64decode > "${auth_dir}/config.toml"
 fi
 
 # --- Build prompt ---

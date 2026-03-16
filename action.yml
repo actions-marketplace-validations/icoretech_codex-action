@@ -22,6 +22,10 @@ inputs:
     description: 'Base64-encoded auth.json from a prior device-auth session. Mutually exclusive with openai_api_key.'
     required: false
     default: ''
+  codex_config_toml:
+    description: 'Base64-encoded config.toml with Codex preferences (model, personality, etc.). Optional, works with either auth method.'
+    required: false
+    default: ''
   image_version:
     description: 'codex-docker image version tag'
     required: false
@@ -55,6 +59,7 @@ runs:
         INPUT_INPUT_TEXT: ${{ inputs.input_text }}
         INPUT_OPENAI_API_KEY: ${{ inputs.openai_api_key }}
         INPUT_CODEX_CONFIG: ${{ inputs.codex_config }}
+        INPUT_CODEX_CONFIG_TOML: ${{ inputs.codex_config_toml }}
         INPUT_IMAGE_VERSION: ${{ inputs.image_version }}
         INPUT_MODEL: ${{ inputs.model }}
         INPUT_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
