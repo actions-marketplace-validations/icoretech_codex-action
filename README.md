@@ -42,7 +42,9 @@ You must provide exactly one of `openai_api_key` or `codex_config`. Providing bo
 
 ### Option B: OAuth / Device Auth (`codex_config`)
 
-Authenticate once via device auth and store the resulting credentials as a secret. This uses your existing Codex account.
+Authenticate via device auth and store the resulting `auth.json` as a secret. This is useful for ChatGPT Pro/Plus subscribers who use Codex through their OpenAI account rather than an API key.
+
+**How it works:** The device-auth flow produces an `auth.json` file containing OAuth tokens (access token, refresh token, account ID). Codex uses the access token to authenticate with OpenAI's API. When the access token expires, Codex automatically refreshes it using the refresh token — no keychain or browser required.
 
 1. Pull the codex-docker image:
 
@@ -50,7 +52,7 @@ Authenticate once via device auth and store the resulting credentials as a secre
    docker pull ghcr.io/icoretech/codex-docker:0.114.0
    ```
 
-2. Run the device auth flow:
+2. Run the device auth flow (the `codex-bootstrap` helper forces file-based credential storage, which is required for CI):
 
    ```bash
    mkdir -p .codex
@@ -62,7 +64,14 @@ Authenticate once via device auth and store the resulting credentials as a secre
 
 3. Follow the browser prompt to complete authentication.
 
-4. Encode the resulting credentials file:
+4. Verify the credentials were written:
+
+   ```bash
+   # You should see auth.json with OAuth tokens
+   cat .codex/auth.json | python3 -c "import json,sys; d=json.load(sys.stdin); print('auth_mode:', d['auth_mode'])"
+   ```
+
+5. Encode the credentials file:
 
    ```bash
    # Linux
@@ -72,16 +81,16 @@ Authenticate once via device auth and store the resulting credentials as a secre
    base64 -i .codex/auth.json
    ```
 
-5. Store the output as a repository secret named `CODEX_CONFIG_B64`:
+6. Store the output as a repository secret named `CODEX_CONFIG_B64`:
    **Settings → Secrets and variables → Actions → New repository secret**
 
-6. Reference it in your workflow:
+7. Reference it in your workflow:
 
    ```yaml
    codex_config: ${{ secrets.CODEX_CONFIG_B64 }}
    ```
 
-> Tokens from device auth may expire over time. If authentication fails, repeat step 2 through 5 to refresh.
+> **Token lifetime:** The access token expires frequently but is refreshed automatically using the refresh token. The refresh token itself eventually expires (typically weeks to months). When authentication starts failing, repeat steps 2–6 to obtain fresh tokens.
 
 ---
 
@@ -89,8 +98,10 @@ Authenticate once via device auth and store the resulting credentials as a secre
 
 | | API Key | OAuth (Device Auth) |
 |---|---|---|
-| **Setup** | Simple (paste key) | Requires device-auth flow |
-| **Token refresh** | Never expires (until revoked) | May need periodic refresh |
+| **Setup** | Simple (paste key) | Requires device-auth flow via Docker |
+| **Token refresh** | Never expires (until revoked) | Auto-refreshes; refresh token expires after weeks/months |
+| **Best for** | CI/CD with platform API access | ChatGPT Pro/Plus subscribers without a separate API key |
+| **Credential file** | N/A (action runs `codex-bootstrap`) | `auth.json` with OAuth tokens |
 
 ---
 
