@@ -255,6 +255,25 @@ teardown() {
 
 # --- Image Version Tests ---
 
+# --- Git Safe Directory Tests ---
+
+@test "gitconfig: creates .codex-gitconfig in workspace" {
+  run bash entrypoint.sh
+  [ "$status" -eq 0 ]
+  # File is cleaned up, but we can verify it was passed to docker
+  [[ "$(docker_call 1)" == *"GIT_CONFIG_GLOBAL=/workspace/.codex-gitconfig"* ]]
+}
+
+@test "gitconfig: passes GIT_CONFIG_GLOBAL env var to exec container" {
+  run bash entrypoint.sh
+  [ "$status" -eq 0 ]
+  local exec_call
+  exec_call=$(docker_call 1)
+  [[ "${exec_call}" == *"-e GIT_CONFIG_GLOBAL=/workspace/.codex-gitconfig"* ]]
+}
+
+# --- Image Version Tests ---
+
 @test "image version: uses custom version in docker calls" {
   export INPUT_IMAGE_VERSION="1.0.0"
   run bash entrypoint.sh

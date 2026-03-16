@@ -336,6 +336,202 @@ jobs:
 
 ---
 
+### Issue Triage with Cross-Repo Analysis
+
+Automatically analyze new issues by cloning relevant repositories and posting an implementation plan as a comment. Codex explores the actual source code, references specific files and line numbers, and produces a grounded technical plan.
+
+This recipe demonstrates:
+- Fetching rich issue metadata (labels, comments, timeline, project board fields)
+- Resolving issue signals (labels, title brackets, body mentions) to repository names
+- Cloning matched repos so Codex can read the source code
+- One-shot analysis with structured output and a bail-out mechanism
+- Auto-labeling based on Codex's analysis
+- Comment upsert (update existing comment on re-run instead of appending)
+
+```yaml
+name: Issue Triage
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to analyze'
+        required: true
+        type: number
+
+concurrency:
+  group: issue-triage-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+    steps:
+      # Wait for the author to finish editing (skip on manual dispatch)
+      - name: Wait for issue to settle
+        if: github.event_name == 'issues'
+        run: sleep 300
+
+      - name: Fetch issue details
+        id: issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          repo="${{ github.repository }}"
+          state=$(gh api "repos/${repo}/issues/${ISSUE_NUMBER}" --jq '.state')
+          if [ "$state" != "open" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+          gh api "repos/${repo}/issues/${ISSUE_NUMBER}" \
+            --jq '{number, title, body, state, labels: [.labels[].name],
+                   assignees: [.assignees[].login], user: .user.login,
+                   created_at, comment_count: .comments}' > /tmp/issue.json
+
+      # Clone repos mentioned in the issue (needs a PAT for private repos)
+      - name: Clone relevant repos
+        if: steps.issue.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.ORG_PAT }}
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/repos"
+          # Extract repo names from labels, title brackets, body mentions
+          # (your resolution logic here)
+          for repo_name in $REPOS; do
+            gh repo clone "your-org/$repo_name" \
+              "$GITHUB_WORKSPACE/repos/$repo_name" \
+              -- --depth=1 --no-single-branch 2>/dev/null || true
+          done
+
+      # Assemble context file for Codex
+      - name: Prepare context
+        if: steps.issue.outputs.skip != 'true'
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/repos"
+          {
+            echo "=== ISSUE ==="
+            cat /tmp/issue.json
+            echo ""
+            echo "=== CLONED REPOS ==="
+            for d in "$GITHUB_WORKSPACE/repos"/*/; do
+              repo=$(basename "$d")
+              echo "--- $repo ---"
+              find "$d" -maxdepth 3 -not -path '*/.git/*' \
+                -not -path '*/node_modules/*' | head -200
+            done
+          } > "$GITHUB_WORKSPACE/context.txt"
+
+      - name: Analyze with Codex
+        if: steps.issue.outputs.skip != 'true'
+        id: analysis
+        uses: icoretech/codex-action@v0
+        with:
+          prompt: |
+            You are a senior engineering triage assistant. This is a ONE-SHOT
+            analysis — do NOT ask questions or defer decisions.
+
+            ## Execution environment
+            You are running inside a read-only GitHub Actions workflow. Do NOT
+            attempt git push, commit, or any state-modifying operations. Your
+            purpose is to examine code and produce a written technical plan.
+
+            ## Available tools
+            Only: bash, git, grep, ripgrep (rg), sed, awk, find, cat, jq, curl.
+            NO npm, node, python, or other runtimes are installed.
+
+            ## Context
+            Read /workspace/context.txt for issue details and repo listings.
+            Source code is under /workspace/repos/ — explore it thoroughly.
+
+            When linking to files, use GitHub URLs:
+            https://github.com/your-org/{repo}/blob/{branch}/{path}#L{line}
+
+            ## Output format
+            1. **Repos involved** — which repo(s) and why
+            2. **Analysis** — what the issue asks for, grounded in actual code
+            3. **Implementation plan** — numbered steps with effort estimates
+            4. **Risks and dependencies**
+            5. **Assumptions**
+
+            ## Auto-labeling
+            At the very end, on a separate line:
+            <!-- CODEX_LABELS: repo1,repo2,repo3 -->
+
+            ## Bail-out
+            If the issue is too vague, already resolved, or not code-related,
+            respond with ONLY: SKIP
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          timeout: '1800'
+
+      - name: Post analysis comment
+        if: >-
+          steps.issue.outputs.skip != 'true'
+          && steps.analysis.outputs.result != ''
+          && steps.analysis.outputs.result != 'SKIP'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODEX_RESULT: ${{ steps.analysis.outputs.result }}
+        run: |
+          clean_result=$(printf '%s\n' "$CODEX_RESULT" \
+            | sed '/<!-- CODEX_LABELS:.*-->/d')
+          {
+            echo "### Codex Triage Analysis"
+            echo ""
+            echo "> [!WARNING]"
+            echo "> Automated preliminary analysis — may contain inaccuracies."
+            echo ""
+            printf '%s\n' "$clean_result"
+          } > /tmp/comment.md
+
+          # Upsert: update existing comment or create new
+          existing=$(gh api \
+            "repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments?per_page=100" \
+            --jq '[.[] | select(.body | contains("Codex Triage"))] | last | .id // empty')
+          if [ -n "$existing" ]; then
+            gh api "repos/${{ github.repository }}/issues/comments/${existing}" \
+              -X PATCH -F "body=@/tmp/comment.md"
+          else
+            gh issue comment "$ISSUE_NUMBER" \
+              --repo "${{ github.repository }}" --body-file /tmp/comment.md
+          fi
+
+      - name: Apply repo labels
+        if: >-
+          steps.issue.outputs.skip != 'true'
+          && steps.analysis.outputs.result != ''
+          && steps.analysis.outputs.result != 'SKIP'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODEX_RESULT: ${{ steps.analysis.outputs.result }}
+        run: |
+          labels=$(printf '%s\n' "$CODEX_RESULT" \
+            | grep -o 'CODEX_LABELS: [^ ]*' | cut -d' ' -f2 || true)
+          [ -z "$labels" ] && exit 0
+          IFS=',' read -ra REPO_LABELS <<< "$labels"
+          for label in "${REPO_LABELS[@]}"; do
+            gh api "repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/labels" \
+              -X POST -f "labels[]=$label" 2>/dev/null || true
+          done
+```
+
+**Key implementation notes:**
+
+- **`safe.directory`**: codex-action automatically configures `GIT_CONFIG_GLOBAL` inside the Docker container, so Codex can run git commands on repos cloned by the runner without ownership errors.
+- **`--no-single-branch`**: Cloning with this flag lets Codex check out non-default branches (e.g., `develop`, feature branches) when the issue refers to a specific environment.
+- **Prompt engineering**: The prompt explicitly lists available tools (preventing wasted tokens on `npm: not found`), enforces read-only behavior, and includes a `SKIP` bail-out for non-code issues.
+- **Comment upsert**: On re-runs, the workflow updates the existing triage comment instead of appending a new one.
+- **Auto-labeling**: Codex outputs a hidden HTML comment with repo names; the workflow parses it and applies them as issue labels.
+
+---
+
 ### Custom Analysis with Model Override
 
 Use the `model` input to target a specific model for a particular task.

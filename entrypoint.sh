@@ -18,6 +18,7 @@ cleanup() {
     fi
   done
   rm -f "${prompt_file:-}" 2>/dev/null || true
+  rm -f "${gitconfig_file:-}" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -135,8 +136,17 @@ output_dir=$(mktemp -d)
 chmod 777 "${output_dir}"
 output_file="${output_dir}/result.txt"
 
+# Pre-configure git safe.directory so codex (running as a different uid inside
+# Docker) can operate on repos cloned by the runner without "dubious ownership"
+# errors. The file is mounted into the container and referenced via
+# GIT_CONFIG_GLOBAL.
+gitconfig_file="${GITHUB_WORKSPACE}/.codex-gitconfig"
+printf '[safe]\n\tdirectory = *\n' > "${gitconfig_file}"
+chmod 644 "${gitconfig_file}"
+
 cmd=(docker run --rm -i
   -e CODEX_HOME=/home/codex/.codex
+  -e GIT_CONFIG_GLOBAL=/workspace/.codex-gitconfig
   -v "${auth_dir}:/home/codex/.codex"
   -v "${GITHUB_WORKSPACE}:/workspace"
   -v "${output_dir}:/tmp/codex_out"
