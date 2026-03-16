@@ -14,6 +14,7 @@ setup() {
   export INPUT_MODEL=""
   export INPUT_REASONING_EFFORT=""
   export INPUT_NETWORK_ACCESS="true"
+  export INPUT_QUIET="false"
   export INPUT_TIMEOUT="300"
 
   # Set mock docker to return some output
@@ -317,6 +318,28 @@ teardown() {
   [[ "${stdin_content}" == "NETWORK POLICY"* ]]
   [[ "${stdin_content}" == *"Summarize these changes"* ]]
   [[ "${stdin_content}" == *"Some extra data"* ]]
+}
+
+# --- Quiet Mode Tests ---
+
+@test "quiet mode: adds --json flag and RUST_LOG=off when enabled" {
+  export INPUT_QUIET="true"
+  run bash entrypoint.sh
+  [ "$status" -eq 0 ]
+  local exec_call
+  exec_call=$(docker_call 1)
+  [[ "${exec_call}" == *"--json"* ]]
+  [[ "${exec_call}" == *"RUST_LOG=off"* ]]
+}
+
+@test "quiet mode: omits --json flag when disabled" {
+  export INPUT_QUIET="false"
+  run bash entrypoint.sh
+  [ "$status" -eq 0 ]
+  local exec_call
+  exec_call=$(docker_call 1)
+  [[ "${exec_call}" != *"--json"* ]]
+  [[ "${exec_call}" != *"RUST_LOG=off"* ]]
 }
 
 # --- Image Version Tests ---

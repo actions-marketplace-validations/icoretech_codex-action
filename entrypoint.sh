@@ -54,6 +54,7 @@ image_version="${INPUT_IMAGE_VERSION:-0.114.0}"
 model="${INPUT_MODEL:-}"
 reasoning_effort="${INPUT_REASONING_EFFORT:-}"
 network_access="${INPUT_NETWORK_ACCESS:-false}"
+quiet="${INPUT_QUIET:-true}"
 timeout_seconds="${INPUT_TIMEOUT:-300}"
 
 image="ghcr.io/icoretech/codex-docker:${image_version}"
@@ -156,7 +157,16 @@ chmod 644 "${gitconfig_file}"
 
 cmd=(docker run --rm -i
   -e CODEX_HOME=/home/codex/.codex
-  -e GIT_CONFIG_GLOBAL=/workspace/.codex-gitconfig
+  -e GIT_CONFIG_GLOBAL=/workspace/.codex-gitconfig)
+
+# When quiet mode is enabled, suppress verbose codex output (tool calls, grep
+# results, file reads) from workflow logs.  --json routes exec output to stdout
+# (which the action discards) and RUST_LOG=off silences tracing on stderr.
+if [[ "${quiet}" == "true" ]]; then
+  cmd+=(-e RUST_LOG=off)
+fi
+
+cmd+=(
   -v "${auth_dir}:/home/codex/.codex"
   -v "${GITHUB_WORKSPACE}:/workspace"
   -v "${output_dir}:/tmp/codex_out"
@@ -165,14 +175,26 @@ cmd=(docker run --rm -i
   --full-auto -C /workspace
   -o /tmp/codex_out/result.txt)
 
+if [[ "${quiet}" == "true" ]]; then
+  cmd+=(--json)
+fi
+
 [[ -n "${model}" ]] && cmd+=(--model "${model}")
 [[ -n "${reasoning_effort}" ]] && cmd+=(-c "model_reasoning_effort=\"${reasoning_effort}\"")
 
 # Pipe prompt via stdin ("-" reads prompt from stdin).
-# Stderr passes through to workflow logs.
-if ! run_with_timeout "${timeout_seconds}" "${cmd[@]}" - < "${prompt_file}"; then
-  echo "::error::Codex execution failed (image: ${image})"
-  exit 1
+# In quiet mode, stdout (JSONL events) is discarded; stderr still passes through
+# for critical errors.  In normal mode, both pass through to workflow logs.
+if [[ "${quiet}" == "true" ]]; then
+  if ! run_with_timeout "${timeout_seconds}" "${cmd[@]}" - < "${prompt_file}" >/dev/null; then
+    echo "::error::Codex execution failed (image: ${image})"
+    exit 1
+  fi
+else
+  if ! run_with_timeout "${timeout_seconds}" "${cmd[@]}" - < "${prompt_file}"; then
+    echo "::error::Codex execution failed (image: ${image})"
+    exit 1
+  fi
 fi
 
 # --- Capture output ---

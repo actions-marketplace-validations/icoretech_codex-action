@@ -42,6 +42,10 @@ inputs:
     description: 'Allow Codex to make network requests (curl, wget, etc.) during execution. When false (default), a prompt-level policy instructs the model not to use networking tools.'
     required: false
     default: 'false'
+  quiet:
+    description: 'Suppress verbose Codex output (tool calls, grep results, file reads) from workflow logs. Prevents source code leakage in logs. Set to false for debugging.'
+    required: false
+    default: 'true'
   timeout:
     description: 'Max seconds for codex execution (default: 300)'
     required: false
@@ -68,5 +72,6 @@ runs:
         INPUT_MODEL: ${{ inputs.model }}
         INPUT_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
         INPUT_NETWORK_ACCESS: ${{ inputs.network_access }}
+        INPUT_QUIET: ${{ inputs.quiet }}
         INPUT_TIMEOUT: ${{ inputs.timeout }}
       run: ${{ github.action_path }}/entrypoint.sh
