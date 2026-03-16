@@ -1,7 +1,8 @@
 # Mock docker command — captures all invocations for assertion
 # Each call appends args to DOCKER_CALLS file (one line per call)
 # Stdin is captured to DOCKER_STDIN_N files (one per call)
-# Output is read from DOCKER_MOCK_OUTPUT if set, otherwise empty
+# Output is written to the -o output file (via -v mount) if present,
+# otherwise to stdout.
 # Exit code is read from DOCKER_MOCK_EXIT_CODES array file (one per line, per call)
 docker() {
   local call_num
@@ -22,7 +23,22 @@ docker() {
   fi
 
   if [[ -f "${DOCKER_MOCK_OUTPUT:-/dev/null}" ]] && [[ "${exit_code}" -eq 0 ]]; then
-    cat "${DOCKER_MOCK_OUTPUT}"
+    # Detect the -v mount for /tmp/codex_output and write mock output there
+    # instead of stdout, simulating the -o flag behavior inside the container.
+    local host_output=""
+    local args=("$@")
+    for ((i=0; i<${#args[@]}; i++)); do
+      if [[ "${args[$i]}" == -v ]] && [[ "${args[$((i+1))]:-}" == *":/tmp/codex_output"* ]]; then
+        host_output="${args[$((i+1))]%%:*}"
+        break
+      fi
+    done
+
+    if [[ -n "${host_output}" ]]; then
+      cat "${DOCKER_MOCK_OUTPUT}" > "${host_output}"
+    else
+      cat "${DOCKER_MOCK_OUTPUT}"
+    fi
   fi
 
   return "${exit_code}"

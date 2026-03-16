@@ -9,6 +9,11 @@ die() {
 }
 
 cleanup() {
+  # auth_dir may contain files owned by the container user (uid 1000);
+  # chmod before removal so the runner user can delete them.
+  if [[ -d "${auth_dir:-}" ]]; then
+    chmod -R 777 "${auth_dir}" 2>/dev/null || true
+  fi
   rm -rf "${auth_dir:-}" "${prompt_file:-}" "${output_file:-}"
 }
 trap cleanup EXIT
@@ -106,19 +111,23 @@ fi
 # --- Run codex ---
 
 output_file=$(mktemp)
+chmod 666 "${output_file}"
 
 cmd=(docker run --rm -i
   -e CODEX_HOME=/home/codex/.codex
   -v "${auth_dir}:/home/codex/.codex"
   -v "${GITHUB_WORKSPACE}:/workspace"
+  -v "${output_file}:/tmp/codex_output"
   "${image}"
   exec --ephemeral --skip-git-repo-check
-  --full-auto -C /workspace)
+  --full-auto -C /workspace
+  -o /tmp/codex_output)
 
 [[ -n "${model}" ]] && cmd+=(--model "${model}")
 
-# Pipe prompt via stdin. Stderr passes through to workflow logs.
-if ! cat "${prompt_file}" | run_with_timeout "${timeout_seconds}" "${cmd[@]}" -q - > "${output_file}"; then
+# Pipe prompt via stdin ("-" reads prompt from stdin).
+# Stderr passes through to workflow logs.
+if ! cat "${prompt_file}" | run_with_timeout "${timeout_seconds}" "${cmd[@]}" -; then
   echo "::error::Codex execution failed (image: ${image})"
   exit 1
 fi

@@ -180,6 +180,23 @@ teardown() {
   [[ "$output" == *"::add-mask::${INPUT_CODEX_CONFIG}"* ]]
 }
 
+# --- Output Flag Tests ---
+
+@test "exec uses -o flag for output capture" {
+  run bash entrypoint.sh
+  [ "$status" -eq 0 ]
+  [[ "$(docker_call 1)" == *"-o /tmp/codex_output"* ]]
+}
+
+@test "exec reads prompt from stdin via dash argument" {
+  run bash entrypoint.sh
+  [ "$status" -eq 0 ]
+  # The last argument should be "-" (read prompt from stdin)
+  local exec_call
+  exec_call=$(docker_call 1)
+  [[ "${exec_call}" == *" -" ]]
+}
+
 # --- Image Version Tests ---
 
 @test "image version: uses custom version in docker calls" {
