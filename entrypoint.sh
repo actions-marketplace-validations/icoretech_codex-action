@@ -14,9 +14,10 @@ cleanup() {
   for dir in "${auth_dir:-}" "${output_dir:-}"; do
     if [[ -d "${dir}" ]]; then
       chmod -R 777 "${dir}" 2>/dev/null || true
+      rm -rf "${dir}" 2>/dev/null || true
     fi
   done
-  rm -rf "${auth_dir:-}" "${output_dir:-}" "${prompt_file:-}"
+  rm -f "${prompt_file:-}" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -141,5 +142,7 @@ delimiter="EOF_$(date +%s%N)"
 {
   echo "result<<${delimiter}"
   cat "${output_file}"
+  # Ensure a trailing newline before the delimiter
+  echo ""
   echo "${delimiter}"
 } >> "${GITHUB_OUTPUT}"
