@@ -47,7 +47,7 @@ Authenticate once via device auth and store the resulting config as a secret. Th
 1. Pull the codex-docker image:
 
    ```bash
-   docker pull ghcr.io/icoretech/codex-docker:0.112.0
+   docker pull ghcr.io/icoretech/codex-docker:0.114.0
    ```
 
 2. Run the device auth flow:
@@ -56,7 +56,7 @@ Authenticate once via device auth and store the resulting config as a secret. Th
    mkdir -p .codex
    docker run --rm -it \
      -v "$PWD/.codex:/home/codex/.codex" \
-     ghcr.io/icoretech/codex-docker:0.112.0 \
+     ghcr.io/icoretech/codex-docker:0.114.0 \
      codex-bootstrap device-auth
    ```
 
@@ -102,7 +102,7 @@ Authenticate once via device auth and store the resulting config as a secret. Th
 | `input_text` | No | `""` | Data to process (e.g., changelog content). Appended after the prompt with a `---` separator when provided. |
 | `openai_api_key` | No | `""` | OpenAI API key. Mutually exclusive with `codex_config`. |
 | `codex_config` | No | `""` | Base64-encoded `config.toml` from a prior device-auth session. Mutually exclusive with `openai_api_key`. |
-| `image_version` | No | `0.112.0` | codex-docker image version tag used for the container. |
+| `image_version` | No | `0.114.0` | codex-docker image version tag used for the container. |
 | `model` | No | `""` | Model override passed to `codex exec --model`. When omitted, the model configured in your Codex config is used. |
 | `reasoning_effort` | No | `""` | Reasoning effort level (`minimal`, `low`, `medium`, `high`, `xhigh`). Passed as `model_reasoning_effort` config override. |
 | `timeout` | No | `300` | Maximum seconds allowed for Codex execution before the step is killed. |
