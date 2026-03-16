@@ -133,7 +133,7 @@ cmd=(docker run --rm -i
 
 # Pipe prompt via stdin ("-" reads prompt from stdin).
 # Stderr passes through to workflow logs.
-if ! cat "${prompt_file}" | run_with_timeout "${timeout_seconds}" "${cmd[@]}" -; then
+if ! run_with_timeout "${timeout_seconds}" "${cmd[@]}" - < "${prompt_file}"; then
   echo "::error::Codex execution failed (image: ${image})"
   exit 1
 fi
