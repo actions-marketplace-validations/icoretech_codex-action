@@ -332,6 +332,16 @@ teardown() {
   [[ "${exec_call}" == *"RUST_LOG=off"* ]]
 }
 
+@test "quiet mode: surfaces stderr on failure" {
+  export INPUT_QUIET="true"
+  # Bootstrap succeeds (call 0), exec fails (call 1)
+  set_docker_exit_codes 0 1
+  echo "ERROR: Quota exceeded. Check your plan and billing details." > "${DOCKER_MOCK_STDERR}"
+  run bash entrypoint.sh
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Quota exceeded"* ]]
+}
+
 @test "quiet mode: omits --json flag when disabled" {
   export INPUT_QUIET="false"
   run bash entrypoint.sh

@@ -22,6 +22,11 @@ docker() {
     exit_code="${line:-0}"
   fi
 
+  # Emit mock stderr if configured
+  if [[ -f "${DOCKER_MOCK_STDERR:-/dev/null}" ]]; then
+    cat "${DOCKER_MOCK_STDERR}" >&2
+  fi
+
   if [[ -f "${DOCKER_MOCK_OUTPUT:-/dev/null}" ]] && [[ "${exit_code}" -eq 0 ]]; then
     # Detect the -v mount for /tmp/codex_out and write mock output to the
     # result file, simulating the -o flag behavior inside the container.
@@ -63,6 +68,7 @@ export -f gtimeout
 setup_mocks() {
   export DOCKER_CALLS="${BATS_TEST_TMPDIR}/docker_calls"
   export DOCKER_MOCK_OUTPUT="${BATS_TEST_TMPDIR}/docker_mock_output"
+  export DOCKER_MOCK_STDERR="${BATS_TEST_TMPDIR}/docker_mock_stderr"
   export DOCKER_MOCK_EXIT_CODES="${BATS_TEST_TMPDIR}/docker_mock_exit_codes"
   touch "${DOCKER_CALLS}"
 

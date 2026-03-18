@@ -183,13 +183,23 @@ fi
 [[ -n "${reasoning_effort}" ]] && cmd+=(-c "model_reasoning_effort=\"${reasoning_effort}\"")
 
 # Pipe prompt via stdin ("-" reads prompt from stdin).
-# In quiet mode, stdout (JSONL events) is discarded; stderr still passes through
-# for critical errors.  In normal mode, both pass through to workflow logs.
+# In quiet mode, stdout (JSONL events) is discarded and stderr is captured to a
+# temp file so that critical errors (quota exceeded, auth failures, etc.) can be
+# surfaced even when verbose logging is off.
 if [[ "${quiet}" == "true" ]]; then
-  if ! run_with_timeout "${timeout_seconds}" "${cmd[@]}" - < "${prompt_file}" >/dev/null; then
+  stderr_log=$(mktemp)
+  if ! run_with_timeout "${timeout_seconds}" "${cmd[@]}" - < "${prompt_file}" >/dev/null 2>"${stderr_log}"; then
+    # Surface the last few lines of stderr so users can diagnose the failure
+    if [[ -s "${stderr_log}" ]]; then
+      echo "::group::Codex stderr output"
+      tail -20 "${stderr_log}"
+      echo "::endgroup::"
+    fi
+    rm -f "${stderr_log}" 2>/dev/null || true
     echo "::error::Codex execution failed (image: ${image})"
     exit 1
   fi
+  rm -f "${stderr_log}" 2>/dev/null || true
 else
   if ! run_with_timeout "${timeout_seconds}" "${cmd[@]}" - < "${prompt_file}"; then
     echo "::error::Codex execution failed (image: ${image})"
