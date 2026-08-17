@@ -18,7 +18,9 @@ Run OpenAI Codex CLI non-interactively in GitHub Actions workflows via [codex-do
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
 
 - name: Use result
-  run: echo "${{ steps.codex.outputs.result }}"
+  env:
+    CODEX_RESULT: ${{ steps.codex.outputs.result }}
+  run: printf '%s\n' "$CODEX_RESULT"
 ```
 
 ---
@@ -49,7 +51,7 @@ Authenticate via device auth and store the resulting `auth.json` as a secret. Th
 1. Pull the codex-docker image:
 
    ```bash
-   docker pull ghcr.io/icoretech/codex-docker:0.114.0
+   docker pull ghcr.io/icoretech/codex-docker:0.147.0
    ```
 
 2. Run the device auth flow (the `codex-bootstrap` helper forces file-based credential storage, which is required for CI):
@@ -58,7 +60,7 @@ Authenticate via device auth and store the resulting `auth.json` as a secret. Th
    mkdir -p .codex
    docker run --rm -it \
      -v "$PWD/.codex:/home/codex/.codex" \
-     ghcr.io/icoretech/codex-docker:0.114.0 \
+     ghcr.io/icoretech/codex-docker:0.147.0 \
      codex-bootstrap device-auth
    ```
 
@@ -145,10 +147,11 @@ You can pass a base64-encoded `config.toml` to customize Codex behavior (model d
 | `openai_api_key` | No | `""` | OpenAI API key. Mutually exclusive with `codex_config`. |
 | `codex_config` | No | `""` | Base64-encoded `auth.json` from a prior device-auth session. Mutually exclusive with `openai_api_key`. |
 | `codex_config_toml` | No | `""` | Base64-encoded `config.toml` with Codex preferences (model, personality, etc.). Works with either auth method. |
-| `image_version` | No | `0.114.0` | codex-docker image version tag used for the container. |
+| `image_version` | No | `0.147.0` | codex-docker image version tag used for the container. |
 | `model` | No | `""` | Model override passed to `codex exec --model`. When omitted, the model configured in your Codex config is used. |
 | `reasoning_effort` | No | `""` | Reasoning effort level (`minimal`, `low`, `medium`, `high`, `xhigh`). Passed as `model_reasoning_effort` config override. |
 | `network_access` | No | `false` | Allow Codex to make network requests (`curl`, `wget`, etc.) during execution. When `false`, a prompt-level policy instructs the model not to use networking tools. |
+| `sandbox` | No | `full-auto` | Sandbox mode for Codex execution. `full-auto` uses bubblewrap isolation (default). `danger-full-access` disables the sandbox — recommended for CI/Docker where the container is already an isolation boundary. Fixes `bwrap: No permissions to create a new namespace` errors on some runners. |
 | `quiet` | No | `true` | Suppress verbose Codex output (tool calls, grep results, file reads) from workflow logs. Prevents source code leakage in CI logs. Set to `false` for debugging. |
 | `timeout` | No | `300` | Maximum seconds allowed for Codex execution before the step is killed. |
 
@@ -343,6 +346,7 @@ jobs:
 Automatically analyze new issues by cloning relevant repositories and posting an implementation plan as a comment. Codex explores the actual source code, references specific files and line numbers, and produces a grounded technical plan.
 
 This recipe demonstrates:
+
 - Fetching rich issue metadata (labels, comments, timeline, project board fields)
 - Resolving issue signals (labels, title brackets, body mentions) to repository names
 - Cloning matched repos so Codex can read the source code
@@ -578,7 +582,9 @@ jobs:
           timeout: "600"
 
       - name: Print analysis
-        run: echo "${{ steps.codex.outputs.result }}"
+        env:
+          CODEX_RESULT: ${{ steps.codex.outputs.result }}
+        run: printf '%s\n' "$CODEX_RESULT"
 ```
 
 ---

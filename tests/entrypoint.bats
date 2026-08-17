@@ -10,7 +10,7 @@ setup() {
   export INPUT_OPENAI_API_KEY="sk-test-key-12345"
   export INPUT_CODEX_CONFIG=""
   export INPUT_CODEX_CONFIG_TOML=""
-  export INPUT_IMAGE_VERSION="0.114.0"
+  export INPUT_IMAGE_VERSION="0.115.0"
   export INPUT_MODEL=""
   export INPUT_REASONING_EFFORT=""
   export INPUT_NETWORK_ACCESS="true"
@@ -320,6 +320,34 @@ teardown() {
   [[ "${stdin_content}" == *"Some extra data"* ]]
 }
 
+# --- Sandbox Tests ---
+
+@test "sandbox: defaults to full-auto without --sandbox flag" {
+  run bash entrypoint.sh
+  [ "$status" -eq 0 ]
+  local exec_call
+  exec_call=$(docker_call 1)
+  [[ "${exec_call}" == *"--full-auto"* ]]
+  [[ "${exec_call}" != *"--sandbox"* ]]
+}
+
+@test "sandbox: danger-full-access adds --sandbox flag" {
+  export INPUT_SANDBOX="danger-full-access"
+  run bash entrypoint.sh
+  [ "$status" -eq 0 ]
+  local exec_call
+  exec_call=$(docker_call 1)
+  [[ "${exec_call}" == *"--full-auto"* ]]
+  [[ "${exec_call}" == *"--sandbox danger-full-access"* ]]
+}
+
+@test "sandbox: rejects invalid values" {
+  export INPUT_SANDBOX="yolo"
+  run bash entrypoint.sh
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"sandbox must be"* ]]
+}
+
 # --- Quiet Mode Tests ---
 
 @test "quiet mode: adds --json flag and RUST_LOG=off when enabled" {
@@ -353,6 +381,25 @@ teardown() {
 }
 
 # --- Image Version Tests ---
+
+@test "renovate watches action and codex-docker image pins" {
+  [ -f renovate.json ]
+
+  jq -e '.enabledManagers | index("github-actions") and index("custom.regex")' renovate.json >/dev/null
+  jq -e '
+    .customManagers
+    | map(select(.depNameTemplate == "ghcr.io/icoretech/codex-docker" or (.matchStrings[]? | contains("depName=(?<depName>"))))
+    | length >= 3
+  ' renovate.json >/dev/null
+  jq -e '.customManagers[].managerFilePatterns[] | select(. == "/^action\\.yml$/")' renovate.json >/dev/null
+  jq -e '.customManagers[].managerFilePatterns[] | select(. == "/^entrypoint\\.sh$/")' renovate.json >/dev/null
+  jq -e '.customManagers[].managerFilePatterns[] | select(. == "/^README\\.md$/")' renovate.json >/dev/null
+  jq -e '
+    .packageRules[]
+    | select(.matchPackageNames[]? == "ghcr.io/icoretech/codex-docker")
+    | select(.groupSlug == "codex-docker-image")
+  ' renovate.json >/dev/null
+}
 
 @test "image version: uses custom version in docker calls" {
   export INPUT_IMAGE_VERSION="1.0.0"
