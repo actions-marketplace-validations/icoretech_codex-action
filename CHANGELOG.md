@@ -1,5 +1,82 @@
 # Changelog
 
+## [0.9.37](https://github.com/icoretech/codex-action/compare/v0.9.36...v0.9.37) (2026-09-05)
+
+
+### Bug Fixes
+
+* **deps:** update codex-docker image to v0.153.4 ([#88](https://github.com/icoretech/codex-action/issues/88)) ([4d618d6](https://github.com/icoretech/codex-action/commit/4d618d62a759e1e4456f72c2b46d2012fe9184db))
+
+## [0.9.36](https://github.com/icoretech/codex-action/compare/v0.9.35...v0.9.36) (2026-09-05)
+
+
+### Bug Fixes
+
+* **deps:** update codex-docker image to v0.153.3 ([#86](https://github.com/icoretech/codex-action/issues/86)) ([ba01377](https://github.com/icoretech/codex-action/commit/ba013778305e964f13a3139a7581d50746b36b00))
+
+## [0.9.35](https://github.com/icoretech/codex-action/compare/v0.9.34...v0.9.35) (2026-09-04)
+
+
+### Bug Fixes
+
+* **deps:** update codex-docker image to v0.153.2 ([#84](https://github.com/icoretech/codex-action/issues/84)) ([d997380](https://github.com/icoretech/codex-action/commit/d9973803ffa9f79074e68c7bbe15e793ccaf11aa))
+
+## [0.9.34](https://github.com/icoretech/codex-action/compare/v0.9.33...v0.9.34) (2026-09-03)
+
+
+### Bug Fixes
+
+* **deps:** update codex-docker image to v0.153.0 ([#82](https://github.com/icoretech/codex-action/issues/82)) ([79c4142](https://github.com/icoretech/codex-action/commit/79c41421845be903007a5031e398aebfece7b793))
+
+## [0.9.33](https://github.com/icoretech/codex-action/compare/v0.9.32...v0.9.33) (2026-09-02)
+
+
+### Bug Fixes
+
+* **deps:** update codex-docker image to v0.152.1 ([#80](https://github.com/icoretech/codex-action/issues/80)) ([5ad2189](https://github.com/icoretech/codex-action/commit/5ad2189cedea0a23a1f7fbd3ea51847e105a3b11))
+
+## [0.9.32](https://github.com/icoretech/codex-action/compare/v0.9.31...v0.9.32) (2026-09-01)
+
+
+### Bug Fixes
+
+* **deps:** update codex-docker image to v0.152.0 ([#78](https://github.com/icoretech/codex-action/issues/78)) ([73db038](https://github.com/icoretech/codex-action/commit/73db038ed160ce70e1ca03e151c539f737a4e5d7))
+
+## [0.9.31](https://github.com/icoretech/codex-action/compare/v0.9.30...v0.9.31) (2026-08-29)
+
+
+### Bug Fixes
+
+* **deps:** update codex-docker image to v0.151.0 ([#76](https://github.com/icoretech/codex-action/issues/76)) ([9545f60](https://github.com/icoretech/codex-action/commit/9545f6009548dc577061d5db5ef9fb427e6ce242))
+
+## [0.9.30](https://github.com/icoretech/codex-action/compare/v0.9.29...v0.9.30) (2026-08-27)
+
+
+### Bug Fixes
+
+* **deps:** update codex-docker image to v0.150.1 ([#74](https://github.com/icoretech/codex-action/issues/74)) ([1f09bad](https://github.com/icoretech/codex-action/commit/1f09bad5df44e128fb60f648eec1319fc6c57450))
+
+## [0.9.29](https://github.com/icoretech/codex-action/compare/v0.9.28...v0.9.29) (2026-08-25)
+
+
+### Bug Fixes
+
+* **deps:** update codex-docker image to v0.149.1 ([#72](https://github.com/icoretech/codex-action/issues/72)) ([8d44709](https://github.com/icoretech/codex-action/commit/8d4470963cb8b14199d33f90aff0871b07a92092))
+
+## [0.9.28](https://github.com/icoretech/codex-action/compare/v0.9.27...v0.9.28) (2026-08-21)
+
+
+### Bug Fixes
+
+* **deps:** update codex-docker image to v0.149.0 ([#70](https://github.com/icoretech/codex-action/issues/70)) ([82be2da](https://github.com/icoretech/codex-action/commit/82be2da8ed9d7d7420d9c09503f8990551b20714))
+
+## [0.9.27](https://github.com/icoretech/codex-action/compare/v0.9.26...v0.9.27) (2026-08-19)
+
+
+### Bug Fixes
+
+* **deps:** update codex-docker image to v0.148.0 ([#68](https://github.com/icoretech/codex-action/issues/68)) ([e06462b](https://github.com/icoretech/codex-action/commit/e06462b3d936f761c2b74a7d968019f1c592a0d6))
+
 ## [0.9.26](https://github.com/icoretech/codex-action/compare/v0.9.25...v0.9.26) (2026-08-07)
 
 
