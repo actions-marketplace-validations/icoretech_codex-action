@@ -51,7 +51,7 @@ Authenticate via device auth and store the resulting `auth.json` as a secret. Th
 1. Pull the codex-docker image:
 
    ```bash
-   docker pull ghcr.io/icoretech/codex-docker:0.155.1
+   docker pull ghcr.io/icoretech/codex-docker:0.165.0
    ```
 
 2. Run the device auth flow (the `codex-bootstrap` helper forces file-based credential storage, which is required for CI):
@@ -60,7 +60,7 @@ Authenticate via device auth and store the resulting `auth.json` as a secret. Th
    mkdir -p .codex
    docker run --rm -it \
      -v "$PWD/.codex:/home/codex/.codex" \
-     ghcr.io/icoretech/codex-docker:0.155.1 \
+     ghcr.io/icoretech/codex-docker:0.165.0 \
      codex-bootstrap device-auth
    ```
 
@@ -147,13 +147,13 @@ You can pass a base64-encoded `config.toml` to customize Codex behavior (model d
 | `openai_api_key` | No | `""` | OpenAI API key. Mutually exclusive with `codex_config`. |
 | `codex_config` | No | `""` | Base64-encoded `auth.json` from a prior device-auth session. Mutually exclusive with `openai_api_key`. |
 | `codex_config_toml` | No | `""` | Base64-encoded `config.toml` with Codex preferences (model, personality, etc.). Works with either auth method. |
-| `image_version` | No | `0.155.1` | codex-docker image version tag used for the container. |
+| `image_version` | No | `0.165.0` | codex-docker image version tag used for the container. |
 | `model` | No | `""` | Model override passed to `codex exec --model`. When omitted, the model configured in your Codex config is used. |
 | `reasoning_effort` | No | `""` | Reasoning effort level (`minimal`, `low`, `medium`, `high`, `xhigh`). Passed as `model_reasoning_effort` config override. |
 | `network_access` | No | `false` | Allow Codex to make network requests (`curl`, `wget`, etc.) during execution. When `false`, a prompt-level policy instructs the model not to use networking tools. |
-| `sandbox` | No | `full-auto` | Sandbox mode for Codex execution. `full-auto` uses bubblewrap isolation (default). `danger-full-access` disables the sandbox — recommended for CI/Docker where the container is already an isolation boundary. Fixes `bwrap: No permissions to create a new namespace` errors on some runners. |
+| `sandbox` | No | `full-auto` | Sandbox mode for Codex execution. `full-auto` selects the `workspace-write` sandbox (default). `danger-full-access` explicitly disables the sandbox. Approval behavior remains controlled by Codex and your configuration. |
 | `quiet` | No | `true` | Suppress verbose Codex output (tool calls, grep results, file reads) from workflow logs. Prevents source code leakage in CI logs. Set to `false` for debugging. |
-| `timeout` | No | `300` | Maximum seconds allowed for Codex execution before the step is killed. |
+| `timeout` | No | `300` | Positive integer execution timeout in seconds, followed by up to one second of client termination grace and owned-container cleanup. Requires `timeout` or `gtimeout` on the runner. |
 
 ---
 
@@ -615,14 +615,16 @@ jobs:
 
 ### Timeout
 
-**Symptoms:** The step is killed after 300 seconds (the default) with a non-zero exit code.
+**Symptoms:** Execution reports a timeout, or the action refuses an invalid timeout value or missing timeout utility.
 
-**Fix:** Increase the `timeout` input:
+**Fix:** Use a positive integer number of seconds. The default is `300`; zero, negative values, fractions and unit suffixes are rejected before Docker starts. Install GNU coreutils if neither `timeout` nor `gtimeout` is available on the runner. For a longer execution interval, increase the `timeout` input:
 
 ```yaml
 with:
   timeout: "600"
 ```
+
+The timer starts after the execution container is created; image setup and authentication are outside this interval. On an execution timeout, interruption of the attached client, or action `INT`/`TERM` during execution, the action verifies its container's immutable ID, name and owner label, then forcibly removes that container before deleting its private runtime files. Other containers are left untouched. Docker ownership checks and removal calls each have a five-second timeout plus one second of termination grace. If Docker cleanup cannot be confirmed, the action fails explicitly and retains the private runtime files for recovery. An uncatchable `SIGKILL` or an unavailable Docker daemon can prevent cleanup.
 
 ---
 

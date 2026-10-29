@@ -30,7 +30,7 @@ inputs:
     description: 'codex-docker image version tag'
     required: false
     # renovate: datasource=docker depName=ghcr.io/icoretech/codex-docker
-    default: '0.155.1'
+    default: '0.165.0'
   model:
     description: 'Model override (passed to codex exec --model)'
     required: false
@@ -44,7 +44,7 @@ inputs:
     required: false
     default: 'false'
   sandbox:
-    description: 'Sandbox mode for Codex execution. Options: full-auto (default, uses bubblewrap), danger-full-access (disables sandbox — recommended for CI/Docker where the container is already isolated).'
+    description: 'Sandbox mode for Codex execution. Options: full-auto (default, selects workspace-write), danger-full-access (explicitly disables the sandbox). Approval behavior remains controlled by Codex and your configuration.'
     required: false
     default: 'full-auto'
   quiet:
@@ -52,7 +52,7 @@ inputs:
     required: false
     default: 'true'
   timeout:
-    description: 'Max seconds for codex execution (default: 300)'
+    description: 'Positive integer execution timeout in seconds (default: 300), followed by up to one second of client termination grace and owned-container cleanup. Requires timeout or gtimeout on the runner.'
     required: false
     default: '300'
 

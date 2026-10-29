@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 # --- Helpers ---
 
@@ -9,18 +10,60 @@ die() {
 }
 
 cleanup() {
-  # auth_dir may contain files owned by the container user (uid 1000);
-  # chmod before removal so the runner user can delete them.
-  for dir in "${auth_dir:-}" "${output_dir:-}"; do
+  local exit_code=$?
+  local cleanup_failed=false
+  trap - EXIT INT TERM
+  if ! remove_execution_container; then
+    cleanup_failed=true
+  fi
+  if [[ -n "${timer_pid:-}" ]]; then
+    kill -TERM "${timer_pid}" 2>/dev/null || true
+    wait "${timer_pid}" 2>/dev/null || true
+  fi
+  if [[ "$cleanup_failed" == true ]]; then
+    # A surviving container can still use its mounted private files.
+    echo "::error::Execution container cleanup failed; private runtime files retained" >&2
+    exit 1
+  fi
+  # Containers use the runner's uid/gid, so cleanup needs no permission widening.
+  for dir in "${runtime_home:-}" "${output_dir:-}"; do
     if [[ -d "${dir}" ]]; then
-      chmod -R 777 "${dir}" 2>/dev/null || true
       rm -rf "${dir}" 2>/dev/null || true
     fi
   done
   rm -f "${prompt_file:-}" 2>/dev/null || true
-  rm -f "${gitconfig_file:-}" 2>/dev/null || true
+  rm -f "${stderr_log:-}" 2>/dev/null || true
+  exit "${exit_code}"
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+verify_execution_container() {
+  local identity actual_id actual_owner actual_name
+  if ! identity=$("${timeout_command}" -k 1 5 docker inspect --format '{{.Id}} {{index .Config.Labels "io.codex-action.owner"}} {{.Name}}' "${container_id:-${container_name}}" 2>/dev/null); then
+    echo "::error::Could not verify execution container ownership" >&2
+    return 1
+  fi
+  read -r actual_id actual_owner actual_name <<< "$identity"
+  if [[ ! "$actual_id" =~ ^[a-f0-9]{64}$ || "$actual_owner" != "$container_name" || "$actual_name" != "/$container_name" || ( -n "${container_id:-}" && "$actual_id" != "$container_id" ) ]]; then
+    echo "::error::Execution container ownership mismatch" >&2
+    return 1
+  fi
+  container_id=$actual_id
+}
+
+remove_execution_container() {
+  [[ -n "${container_name:-}" ]] || return 0
+  # Recover an interrupted create only through the exact name plus owner label.
+  verify_execution_container || return 1
+  if ! "${timeout_command}" -k 1 5 docker rm --force "$container_id" >/dev/null 2>&1; then
+    echo "::error::Could not remove owned execution container" >&2
+    return 1
+  fi
+  container_name=""
+  container_id=""
+}
 
 # Cross-platform base64 decode (GNU uses -d, macOS uses -D)
 b64decode() {
@@ -31,16 +74,16 @@ b64decode() {
   fi
 }
 
-# Cross-platform timeout (GNU coreutils on Linux, gtimeout on macOS via brew)
+# The timeout command is selected before runtime setup.
 run_with_timeout() {
   local seconds="$1"; shift
-  if command -v timeout >/dev/null 2>&1; then
-    timeout "${seconds}" "$@"
-  elif command -v gtimeout >/dev/null 2>&1; then
-    gtimeout "${seconds}" "$@"
-  else
-    "$@"
-  fi
+  local exit_code=0
+  "${timeout_command}" -k 1 "${seconds}" "$@" <&0 &
+  timer_pid=$!
+  wait "$timer_pid" || exit_code=$?
+  timer_pid=""
+  remove_execution_container || return 1
+  return "$exit_code"
 }
 
 # --- Read inputs ---
@@ -51,7 +94,7 @@ openai_api_key="${INPUT_OPENAI_API_KEY:-}"
 codex_config="${INPUT_CODEX_CONFIG:-}"
 codex_config_toml="${INPUT_CODEX_CONFIG_TOML:-}"
 # renovate: datasource=docker depName=ghcr.io/icoretech/codex-docker
-image_version="${INPUT_IMAGE_VERSION:-0.155.1}"
+image_version="${INPUT_IMAGE_VERSION:-0.165.0}"
 model="${INPUT_MODEL:-}"
 reasoning_effort="${INPUT_REASONING_EFFORT:-}"
 network_access="${INPUT_NETWORK_ACCESS:-false}"
@@ -92,6 +135,20 @@ case "${sandbox}" in
   *) die "sandbox must be 'full-auto' or 'danger-full-access', got '${sandbox}'" ;;
 esac
 
+if [[ ! "${timeout_seconds}" =~ ^[0-9]+$ || ! "${timeout_seconds}" =~ [1-9] ]]; then
+  die "timeout must be a positive integer number of seconds"
+fi
+# Normalize zero-padded decimal values without shell integer arithmetic.
+timeout_seconds="${timeout_seconds#"${timeout_seconds%%[!0]*}"}"
+
+if command -v timeout >/dev/null 2>&1; then
+  timeout_command=timeout
+elif command -v gtimeout >/dev/null 2>&1; then
+  timeout_command=gtimeout
+else
+  die "timeout or gtimeout is required; install GNU coreutils"
+fi
+
 # Validate base64 if codex_config is provided
 if [[ -n "${codex_config}" ]]; then
   if ! echo "${codex_config}" | b64decode >/dev/null 2>&1; then
@@ -108,15 +165,20 @@ fi
 
 # --- Setup auth ---
 
-auth_dir=$(mktemp -d)
-chmod 777 "${auth_dir}"
+container_user="$(id -u):$(id -g)"
+runtime_home=$(mktemp -d)
+auth_dir="${runtime_home}/.codex"
+mkdir "${auth_dir}"
 
 if [[ -n "${openai_api_key}" ]]; then
   # API key auth: run codex-bootstrap to write credentials
+  export OPENAI_API_KEY="${openai_api_key}"
   docker run --rm -i \
+    --user "${container_user}" \
+    -e HOME=/home/codex \
     -e CODEX_HOME=/home/codex/.codex \
-    -e "OPENAI_API_KEY=${openai_api_key}" \
-    -v "${auth_dir}:/home/codex/.codex" \
+    -e OPENAI_API_KEY \
+    -v "${runtime_home}:/home/codex" \
     "${image}" \
     codex-bootstrap api-key-login
 elif [[ -n "${codex_config}" ]]; then
@@ -151,20 +213,23 @@ fi
 # --- Run codex ---
 
 output_dir=$(mktemp -d)
-chmod 777 "${output_dir}"
 output_file="${output_dir}/result.txt"
 
-# Pre-configure git safe.directory so codex (running as a different uid inside
-# Docker) can operate on repos cloned by the runner without "dubious ownership"
-# errors. The file is mounted into the container and referenced via
-# GIT_CONFIG_GLOBAL.
-gitconfig_file="${GITHUB_WORKSPACE}/.codex-gitconfig"
+# Pre-configure git safe.directory so codex can operate on mounted checkouts
+# without "dubious ownership" errors. The file is mounted into the container
+# and referenced via GIT_CONFIG_GLOBAL.
+gitconfig_file="${runtime_home}/.gitconfig"
 printf '[safe]\n\tdirectory = *\n' > "${gitconfig_file}"
-chmod 644 "${gitconfig_file}"
 
-cmd=(docker run --rm -i
+container_name="codex-action-${runtime_home##*/}-$$"
+cmd=(docker create -i
+  --name "$container_name"
+  --label "io.codex-action.owner=$container_name"
+  --cidfile "$runtime_home/container.id"
+  --user "${container_user}"
+  -e HOME=/home/codex
   -e CODEX_HOME=/home/codex/.codex
-  -e GIT_CONFIG_GLOBAL=/workspace/.codex-gitconfig)
+  -e GIT_CONFIG_GLOBAL=/home/codex/.gitconfig)
 
 # When quiet mode is enabled, suppress verbose codex output (tool calls, grep
 # results, file reads) from workflow logs.  --json routes exec output to stdout
@@ -174,17 +239,17 @@ if [[ "${quiet}" == "true" ]]; then
 fi
 
 cmd+=(
-  -v "${auth_dir}:/home/codex/.codex"
+  -v "${runtime_home}:/home/codex"
   -v "${GITHUB_WORKSPACE}:/workspace"
   -v "${output_dir}:/tmp/codex_out"
   "${image}"
-  exec --ephemeral --skip-git-repo-check
-  --full-auto)
+  exec --ephemeral --skip-git-repo-check)
 
-# Override the sandbox when the user requests danger-full-access (recommended for
-# CI/Docker where the container itself is already an isolation boundary).
+# Keep the public full-auto input while selecting a supported CLI sandbox value.
 if [[ "${sandbox}" == "danger-full-access" ]]; then
   cmd+=(--sandbox danger-full-access)
+else
+  cmd+=(--sandbox workspace-write)
 fi
 
 cmd+=(-C /workspace -o /tmp/codex_out/result.txt)
@@ -196,13 +261,18 @@ fi
 [[ -n "${model}" ]] && cmd+=(--model "${model}")
 [[ -n "${reasoning_effort}" ]] && cmd+=(-c "model_reasoning_effort=\"${reasoning_effort}\"")
 
+"${cmd[@]}" - >/dev/null || die "Could not create execution container"
+container_id=$(cat "$runtime_home/container.id")
+verify_execution_container || exit 1
+cmd=(docker start --attach --interactive "$container_id")
+
 # Pipe prompt via stdin ("-" reads prompt from stdin).
 # In quiet mode, stdout (JSONL events) is discarded and stderr is captured to a
 # temp file so that critical errors (quota exceeded, auth failures, etc.) can be
 # surfaced even when verbose logging is off.
 if [[ "${quiet}" == "true" ]]; then
   stderr_log=$(mktemp)
-  if ! run_with_timeout "${timeout_seconds}" "${cmd[@]}" - < "${prompt_file}" >/dev/null 2>"${stderr_log}"; then
+  if ! run_with_timeout "${timeout_seconds}" "${cmd[@]}" < "${prompt_file}" >/dev/null 2>"${stderr_log}"; then
     # Surface the last few lines of stderr so users can diagnose the failure
     if [[ -s "${stderr_log}" ]]; then
       echo "::group::Codex stderr output"
@@ -215,7 +285,7 @@ if [[ "${quiet}" == "true" ]]; then
   fi
   rm -f "${stderr_log}" 2>/dev/null || true
 else
-  if ! run_with_timeout "${timeout_seconds}" "${cmd[@]}" - < "${prompt_file}"; then
+  if ! run_with_timeout "${timeout_seconds}" "${cmd[@]}" < "${prompt_file}"; then
     echo "::error::Codex execution failed (image: ${image})"
     exit 1
   fi
